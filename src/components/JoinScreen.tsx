@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Radio } from "lucide-react";
 
 interface Props {
-  onJoined: (member: { id: string; name: string; role: string }) => void;
+  onJoined: (member: { id: string; name: string; role: string; last_seen: string }) => void;
 }
 
 export const JoinScreen = ({ onJoined }: Props) => {
