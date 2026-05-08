@@ -14,11 +14,27 @@ const Index = () => {
     if (!stored) { setLoading(false); return; }
     try {
       const parsed = JSON.parse(stored) as Member;
-      // verify still exists
       supabase.from("team_members").select("*").eq("id", parsed.id).maybeSingle().then(({ data }) => {
-        if (data) setMe(data as Member);
-        else localStorage.removeItem("member");
-        setLoading(false);
+        if (data) {
+          setMe(data as Member);
+          setLoading(false);
+          return;
+        }
+
+        supabase
+          .from("team_members")
+          .insert({ id: parsed.id, name: parsed.name, role: parsed.role })
+          .select()
+          .single()
+          .then(({ data: restored }) => {
+            if (restored) {
+              localStorage.setItem("member", JSON.stringify(restored));
+              setMe(restored as Member);
+            } else {
+              localStorage.removeItem("member");
+            }
+            setLoading(false);
+          });
       });
     } catch {
       localStorage.removeItem("member");
