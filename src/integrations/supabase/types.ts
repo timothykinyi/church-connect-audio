@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           body: string
           created_at: string
+          group_key: string | null
           id: string
           played: boolean
           recipient_id: string
@@ -26,6 +27,7 @@ export type Database = {
         Insert: {
           body: string
           created_at?: string
+          group_key?: string | null
           id?: string
           played?: boolean
           recipient_id: string
@@ -34,6 +36,7 @@ export type Database = {
         Update: {
           body?: string
           created_at?: string
+          group_key?: string | null
           id?: string
           played?: boolean
           recipient_id?: string
