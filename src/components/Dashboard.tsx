@@ -25,7 +25,7 @@ interface Props {
 }
 
 const AUDIO_READY_KEY = "audio-ready-v1";
-const STALE_MS = 120_000; // 2 min — tolerate background-tab throttling
+const STALE_MS = 10 * 60_000; // 10 min — tolerate mobile/background throttling without hiding teammates
 const HEARTBEAT_MS = 8_000;
 
 // Build a stable group_key from a set of member ids (sorted, joined)
@@ -68,14 +68,19 @@ export const Dashboard = ({ me, onLeave }: Props) => {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  // Heartbeat presence — frequent + on visibility change. NO auto-delete on unload (caused false drops on refresh).
+  // Heartbeat presence — frequent + on visibility/focus. Never auto-delete; rows persist for the service.
   useEffect(() => {
-    const beat = () => supabase.from("team_members").update({ last_seen: new Date().toISOString() }).eq("id", me.id);
+    const beat = () => {
+      const next = { ...me, last_seen: new Date().toISOString() };
+      localStorage.setItem("member", JSON.stringify(next));
+      return supabase.from("team_members").update({ last_seen: next.last_seen }).eq("id", me.id);
+    };
     beat();
     const interval = setInterval(beat, HEARTBEAT_MS);
     const onVis = () => { if (document.visibilityState === "visible") beat(); };
+    window.addEventListener("focus", beat);
     document.addEventListener("visibilitychange", onVis);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVis); };
+    return () => { clearInterval(interval); window.removeEventListener("focus", beat); document.removeEventListener("visibilitychange", onVis); };
   }, [me.id]);
 
   // Load + subscribe members (wide cutoff so bg-tab teammates don't disappear)
@@ -210,7 +215,6 @@ export const Dashboard = ({ me, onLeave }: Props) => {
 
   const handleLeave = async () => {
     stopSpeaking();
-    await supabase.from("team_members").delete().eq("id", me.id);
     localStorage.removeItem("member");
     onLeave();
   };
