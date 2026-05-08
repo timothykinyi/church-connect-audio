@@ -1,30 +1,49 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ROLE_COLORS } from "@/lib/roles";
 import { speak, primeSpeech, stopSpeaking, getVoices } from "@/lib/speech";
 import { toast } from "sonner";
-import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download } from "lucide-react";
+import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download, UsersRound, Plus, X } from "lucide-react";
 
 type Member = { id: string; name: string; role: string; last_seen: string };
-type Message = { id: string; sender_id: string; recipient_id: string; body: string; played: boolean; created_at: string };
+type Message = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  played: boolean;
+  created_at: string;
+  group_key: string | null;
+};
 
 interface Props {
   me: Member;
   onLeave: () => void;
 }
 
+const AUDIO_READY_KEY = "audio-ready-v1";
+const STALE_MS = 120_000; // 2 min — tolerate background-tab throttling
+const HEARTBEAT_MS = 8_000;
+
+// Build a stable group_key from a set of member ids (sorted, joined)
+const groupKeyOf = (ids: string[]) => [...new Set(ids)].sort().join("|");
+
 export const Dashboard = ({ me, onLeave }: Props) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [activePeerId, setActivePeerId] = useState<string>("");
+  // active conversation: either a single peer id, or a group key
+  const [activeKey, setActiveKey] = useState<string>(""); // member id OR "group:<key>"
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [audioReady, setAudioReady] = useState(false);
+  const [audioReady, setAudioReady] = useState<boolean>(() => localStorage.getItem(AUDIO_READY_KEY) === "1");
   const [muted, setMuted] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const [groupSelection, setGroupSelection] = useState<Set<string>>(new Set());
 
   const playedIds = useRef<Set<string>>(new Set());
   const queueRef = useRef<Message[]>([]);
@@ -36,30 +55,33 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { membersRef.current = members; }, [members]);
 
-  // Preload voices early
   useEffect(() => { getVoices(); }, []);
 
-  // PWA install prompt capture
+  // Auto-prime speech if previously enabled (works on Chrome; iOS will need one tap anyway)
+  useEffect(() => {
+    if (audioReady) primeSpeech().catch(() => {});
+  }, []); // once
+
   useEffect(() => {
     const handler = (e: any) => { e.preventDefault(); setInstallPrompt(e); };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  // Heartbeat presence
+  // Heartbeat presence — frequent + on visibility change. NO auto-delete on unload (caused false drops on refresh).
   useEffect(() => {
     const beat = () => supabase.from("team_members").update({ last_seen: new Date().toISOString() }).eq("id", me.id);
     beat();
-    const interval = setInterval(beat, 15000);
-    const onUnload = () => { navigator.sendBeacon?.("/"); supabase.from("team_members").delete().eq("id", me.id); };
-    window.addEventListener("beforeunload", onUnload);
-    return () => { clearInterval(interval); window.removeEventListener("beforeunload", onUnload); };
+    const interval = setInterval(beat, HEARTBEAT_MS);
+    const onVis = () => { if (document.visibilityState === "visible") beat(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVis); };
   }, [me.id]);
 
-  // Load + subscribe members
+  // Load + subscribe members (wide cutoff so bg-tab teammates don't disappear)
   useEffect(() => {
     const load = async () => {
-      const cutoff = new Date(Date.now() - 45_000).toISOString();
+      const cutoff = new Date(Date.now() - STALE_MS).toISOString();
       const { data } = await supabase.from("team_members").select("*").gte("last_seen", cutoff).order("created_at");
       if (data) setMembers(data);
     };
@@ -68,11 +90,11 @@ export const Dashboard = ({ me, onLeave }: Props) => {
       .channel("members-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "team_members" }, load)
       .subscribe();
-    const refresh = setInterval(load, 12000);
+    const refresh = setInterval(load, 10_000);
     return () => { supabase.removeChannel(channel); clearInterval(refresh); };
   }, []);
 
-  // Sequential speech queue — ensures audio fully loaded & finished before next plays
+  // Sequential speech queue — speaks each message twice, 10s apart
   const drainQueue = async () => {
     if (playingRef.current) return;
     playingRef.current = true;
@@ -83,13 +105,20 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         continue;
       }
       const sender = membersRef.current.find((m) => m.id === msg.sender_id);
-      const prefix = sender ? `Message from ${sender.name}, ${sender.role}. ` : "New message. ";
+      const groupNote = msg.group_key ? " (group message)" : "";
+      const prefix = sender ? `Message from ${sender.name}, ${sender.role}${groupNote}. ` : "New message. ";
+      const fullText = prefix + msg.body;
+
       setSpeakingId(msg.id);
-      await speak(prefix + msg.body, {
-        onError: (err) => toast.error(`Audio: ${err}`),
-      });
-      setSpeakingId(null);
+      await speak(fullText, { onError: (err) => toast.error(`Audio: ${err}`) });
+      // Mark played after first read so badges clear
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
+      // Wait 10s then repeat once
+      await new Promise((r) => setTimeout(r, 10_000));
+      if (!mutedRef.current) {
+        await speak("Repeat. " + fullText, { onError: () => {} });
+      }
+      setSpeakingId(null);
     }
     playingRef.current = false;
   };
@@ -109,10 +138,9 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         .select("*")
         .or(`recipient_id.eq.${me.id},sender_id.eq.${me.id}`)
         .order("created_at", { ascending: true })
-        .limit(200);
+        .limit(500);
       if (data) {
-        setMessages(data);
-        // Mark already-loaded as "seen" so they don't auto-replay on refresh
+        setMessages(data as Message[]);
         data.forEach((m) => playedIds.current.add(m.id));
       }
     };
@@ -135,27 +163,45 @@ export const Dashboard = ({ me, onLeave }: Props) => {
     return () => { supabase.removeChannel(channel); };
   }, [me.id]);
 
-  // Auto-scroll thread
-  useEffect(() => { threadEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activePeerId]);
+  useEffect(() => { threadEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeKey]);
 
   const enableAudio = async () => {
     await primeSpeech();
+    localStorage.setItem(AUDIO_READY_KEY, "1");
     setAudioReady(true);
-    toast.success("Audio enabled");
+    toast.success("Audio enabled — stays on across refreshes");
   };
+
+  const isGroupKey = activeKey.startsWith("group:");
+  const activePeerId = isGroupKey ? "" : activeKey;
+  const activeGroupKey = isGroupKey ? activeKey.slice(6) : "";
 
   const handleSend = async () => {
     const body = text.trim();
     if (!body) return toast.error("Type a message");
     if (body.length > 500) return toast.error("Message too long (max 500)");
-    if (!activePeerId) return toast.error("Pick a teammate to chat with");
+    if (!activeKey) return toast.error("Pick a teammate or group");
 
     setSending(true);
-    const { error } = await supabase.from("messages").insert({
-      sender_id: me.id,
-      recipient_id: activePeerId,
-      body,
-    });
+    let error;
+    if (isGroupKey) {
+      const ids = activeGroupKey.split("|").filter((id) => id !== me.id);
+      const rows = ids.map((rid) => ({
+        sender_id: me.id,
+        recipient_id: rid,
+        body,
+        group_key: activeGroupKey,
+      }));
+      const res = await supabase.from("messages").insert(rows);
+      error = res.error;
+    } else {
+      const res = await supabase.from("messages").insert({
+        sender_id: me.id,
+        recipient_id: activePeerId,
+        body,
+      });
+      error = res.error;
+    }
     setSending(false);
 
     if (error) return toast.error("Failed to send");
@@ -182,23 +228,66 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   };
 
   const others = members.filter((m) => m.id !== me.id);
-  const peer = members.find((m) => m.id === activePeerId);
 
-  // Per-peer thread
-  const thread = messages.filter(
-    (m) => activePeerId && (
+  // Distinct groups I'm part of (derived from messages)
+  const myGroups = useMemo(() => {
+    const map = new Map<string, { key: string; memberIds: string[] }>();
+    messages.forEach((m) => {
+      if (!m.group_key) return;
+      const ids = m.group_key.split("|");
+      if (!ids.includes(me.id)) return;
+      if (!map.has(m.group_key)) map.set(m.group_key, { key: m.group_key, memberIds: ids });
+    });
+    return [...map.values()];
+  }, [messages, me.id]);
+
+  // Per-conversation thread
+  const thread = messages.filter((m) => {
+    if (isGroupKey) return m.group_key === activeGroupKey;
+    if (!activePeerId) return false;
+    return !m.group_key && (
       (m.sender_id === me.id && m.recipient_id === activePeerId) ||
       (m.sender_id === activePeerId && m.recipient_id === me.id)
-    )
-  );
-
-  // Unread counts per peer (incoming, not yet played)
-  const unreadByPeer = new Map<string, number>();
-  messages.forEach((m) => {
-    if (m.recipient_id === me.id && !m.played) {
-      unreadByPeer.set(m.sender_id, (unreadByPeer.get(m.sender_id) || 0) + 1);
-    }
+    );
   });
+
+  // De-dupe group messages (one row per recipient — show once to sender)
+  const dedupedThread = isGroupKey
+    ? thread.filter((m, i, arr) => arr.findIndex((x) => x.created_at === m.created_at && x.sender_id === m.sender_id && x.body === m.body) === i)
+    : thread;
+
+  // Unread counts
+  const unreadByPeer = new Map<string, number>();
+  const unreadByGroup = new Map<string, number>();
+  messages.forEach((m) => {
+    if (m.recipient_id !== me.id || m.played) return;
+    if (m.group_key) unreadByGroup.set(m.group_key, (unreadByGroup.get(m.group_key) || 0) + 1);
+    else unreadByPeer.set(m.sender_id, (unreadByPeer.get(m.sender_id) || 0) + 1);
+  });
+
+  const peer = members.find((m) => m.id === activePeerId);
+  const activeGroup = isGroupKey ? myGroups.find((g) => g.key === activeGroupKey) : undefined;
+  const groupMembers = activeGroup ? activeGroup.memberIds.map((id) => members.find((m) => m.id === id)).filter(Boolean) as Member[] : [];
+
+  const toggleGroupPick = (id: string) => {
+    setGroupSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const startGroup = () => {
+    if (groupSelection.size < 2) return toast.error("Pick at least 2 teammates");
+    const key = groupKeyOf([me.id, ...groupSelection]);
+    setActiveKey("group:" + key);
+    setGroupPickerOpen(false);
+    setGroupSelection(new Set());
+  };
+
+  const headerTitle = isGroupKey
+    ? `Group · ${groupMembers.length} people`
+    : peer?.name ?? "";
 
   return (
     <div className="min-h-screen p-3 md:p-6">
@@ -236,7 +325,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         {!audioReady && (
           <div className="mb-4 p-4 rounded-xl border border-primary/40 bg-primary/10 flex items-center justify-between gap-3">
             <p className="text-sm">
-              <strong>Tap to enable voice</strong> — your browser needs one tap before audio can auto-play.
+              <strong>Tap to enable voice</strong> — one tap, then it stays on across refreshes.
             </p>
             <Button onClick={enableAudio} size="sm" style={{ background: 'var(--gradient-primary)', color: 'hsl(var(--primary-foreground))' }}>
               Enable audio
@@ -245,23 +334,46 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         )}
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-4">
-          {/* Sidebar: team list with unread */}
+          {/* Sidebar */}
           <aside className="bg-card border border-border rounded-2xl p-4 h-fit lg:sticky lg:top-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-primary" />
-              <h2 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Team</h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                <h2 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Team</h2>
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setGroupPickerOpen((v) => !v)}>
+                {groupPickerOpen ? <X className="w-3.5 h-3.5" /> : <><Plus className="w-3.5 h-3.5 mr-1" /><span className="text-xs">Group</span></>}
+              </Button>
             </div>
+
+            {groupPickerOpen && (
+              <div className="mb-3 p-3 rounded-xl border border-primary/30 bg-primary/5 space-y-2">
+                <p className="text-xs text-muted-foreground">Pick teammates for the group:</p>
+                {others.length === 0 && <p className="text-xs italic">No teammates online</p>}
+                {others.map((m) => (
+                  <label key={m.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox checked={groupSelection.has(m.id)} onCheckedChange={() => toggleGroupPick(m.id)} />
+                    <span className="truncate">{m.name}</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">{m.role}</span>
+                  </label>
+                ))}
+                <Button size="sm" className="w-full mt-1" onClick={startGroup} style={{ background: 'var(--gradient-primary)', color: 'hsl(var(--primary-foreground))' }}>
+                  Start group ({groupSelection.size})
+                </Button>
+              </div>
+            )}
+
             {others.length === 0 ? (
               <p className="text-sm text-muted-foreground italic px-2">Waiting for teammates…</p>
             ) : (
               <ul className="space-y-1">
                 {others.map((m) => {
                   const unread = unreadByPeer.get(m.id) || 0;
-                  const active = activePeerId === m.id;
+                  const active = activeKey === m.id;
                   return (
                     <li key={m.id}>
                       <button
-                        onClick={() => setActivePeerId(m.id)}
+                        onClick={() => setActiveKey(m.id)}
                         className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${
                           active ? "border-primary bg-primary/10" : "border-transparent hover:bg-secondary/40"
                         }`}
@@ -289,6 +401,49 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                 })}
               </ul>
             )}
+
+            {myGroups.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 mt-4 mb-2">
+                  <UsersRound className="w-4 h-4 text-primary" />
+                  <h2 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Groups</h2>
+                </div>
+                <ul className="space-y-1">
+                  {myGroups.map((g) => {
+                    const names = g.memberIds
+                      .filter((id) => id !== me.id)
+                      .map((id) => members.find((m) => m.id === id)?.name ?? "?")
+                      .join(", ");
+                    const unread = unreadByGroup.get(g.key) || 0;
+                    const active = activeKey === "group:" + g.key;
+                    return (
+                      <li key={g.key}>
+                        <button
+                          onClick={() => setActiveKey("group:" + g.key)}
+                          className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${
+                            active ? "border-primary bg-primary/10" : "border-transparent hover:bg-secondary/40"
+                          }`}
+                        >
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
+                            <UsersRound className="w-4 h-4 text-primary-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{names || "Group"}</p>
+                            <p className="text-[10px] text-muted-foreground">{g.memberIds.length} people</p>
+                          </div>
+                          {unread > 0 && (
+                            <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
+                              {unread}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+
             <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground px-2">
               <p>You: <span className="text-foreground font-medium">{me.name}</span></p>
               <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${ROLE_COLORS[me.role] ?? ROLE_COLORS.Other}`}>
@@ -299,41 +454,49 @@ export const Dashboard = ({ me, onLeave }: Props) => {
 
           {/* Conversation */}
           <section className="bg-card border border-border rounded-2xl flex flex-col min-h-[70vh]" style={{ boxShadow: 'var(--shadow-card)' }}>
-            {!peer ? (
+            {!activeKey ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground p-8 text-center">
                 <div>
                   <Radio className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">Pick a teammate from the list to start a conversation.</p>
+                  <p className="text-sm">Pick a teammate, or tap <strong>+ Group</strong> to start a group chat.</p>
                 </div>
               </div>
             ) : (
               <>
                 <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: 'var(--gradient-primary)', color: 'hsl(var(--primary-foreground))' }}>
-                      {peer.name[0]?.toUpperCase()}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0" style={{ background: 'var(--gradient-primary)', color: 'hsl(var(--primary-foreground))' }}>
+                      {isGroupKey ? <UsersRound className="w-4 h-4" /> : peer?.name[0]?.toUpperCase()}
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm leading-tight">{peer.name}</p>
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${ROLE_COLORS[peer.role] ?? ROLE_COLORS.Other}`}>
-                        {peer.role}
-                      </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm leading-tight truncate">{headerTitle}</p>
+                      {isGroupKey ? (
+                        <p className="text-[10px] text-muted-foreground truncate">{groupMembers.map((m) => m.name).join(" · ")}</p>
+                      ) : peer && (
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${ROLE_COLORS[peer.role] ?? ROLE_COLORS.Other}`}>
+                          {peer.role}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {speakingId && <span className="text-xs font-mono text-primary animate-pulse">● Speaking…</span>}
+                  {speakingId && <span className="text-xs font-mono text-primary animate-pulse shrink-0">● Speaking…</span>}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                  {thread.length === 0 ? (
-                    <p className="text-center text-sm text-muted-foreground italic mt-10">No messages yet. Say hi.</p>
+                  {dedupedThread.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground italic mt-10">No messages yet.</p>
                   ) : (
-                    thread.map((msg) => {
+                    dedupedThread.map((msg) => {
                       const isMine = msg.sender_id === me.id;
+                      const sender = members.find((m) => m.id === msg.sender_id);
                       return (
                         <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                           <div className={`max-w-[78%] rounded-2xl px-4 py-2.5 border ${
                             isMine ? "bg-primary/15 border-primary/30 rounded-br-sm" : "bg-secondary/60 border-border rounded-bl-sm"
                           } ${speakingId === msg.id ? "ring-2 ring-primary" : ""}`}>
+                            {isGroupKey && !isMine && (
+                              <p className="text-[10px] font-semibold text-primary mb-0.5">{sender?.name ?? "Unknown"}</p>
+                            )}
                             <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
                             <div className="flex items-center justify-end gap-1.5 mt-1 text-[10px] font-mono text-muted-foreground">
                               <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -359,7 +522,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                     <Textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder={`Message ${peer.name}…`}
+                      placeholder={isGroupKey ? "Message the group…" : `Message ${peer?.name ?? ""}…`}
                       maxLength={500}
                       rows={1}
                       className="bg-input border-border resize-none min-h-[44px] max-h-32"
@@ -378,7 +541,9 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                   </div>
                   <div className="flex items-center justify-between mt-1.5 px-1">
                     <span className="text-[10px] text-muted-foreground font-mono">{text.length}/500 · Enter to send · Shift+Enter newline</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">🔒 Only {peer.name} hears this</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      🔒 {isGroupKey ? `${groupMembers.length - 1} recipients hear this` : `Only ${peer?.name ?? ""} hears this`} · 🔁 Plays twice
+                    </span>
                   </div>
                 </div>
               </>
