@@ -216,8 +216,23 @@ export const Dashboard = ({ me, onLeave }: Props) => {
 
   const handleLeave = async () => {
     stopSpeaking();
+    // Remove from live team list so others stop seeing this user
+    try { await supabase.from("team_members").delete().eq("id", me.id); } catch {}
     localStorage.removeItem("member");
     onLeave();
+  };
+
+  const sendQuick = async (body: string) => {
+    if (!activeKey) return toast.error("Pick a teammate or group first");
+    if (isGroupKey) {
+      const ids = activeGroupKey.split("|").filter((id) => id !== me.id);
+      const rows = ids.map((rid) => ({ sender_id: me.id, recipient_id: rid, body, group_key: activeGroupKey }));
+      const { error } = await supabase.from("messages").insert(rows);
+      if (error) toast.error("Failed to send");
+    } else {
+      const { error } = await supabase.from("messages").insert({ sender_id: me.id, recipient_id: activePeerId, body });
+      if (error) toast.error("Failed to send");
+    }
   };
 
   const replay = (msg: Message) => {
