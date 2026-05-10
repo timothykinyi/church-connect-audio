@@ -578,6 +578,27 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                       🔒 {isGroupKey ? `${groupMembers.length - 1} recipients hear this` : `Only ${peer?.name ?? ""} hears this`} · 🔁 Plays twice
                     </span>
                   </div>
+
+                  {/* Quick texts — role-specific shortcuts */}
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Zap className="w-3.5 h-3.5 text-primary" />
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Quick · {me.role}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(QUICK_TEXTS[me.role] ?? QUICK_TEXTS.Other).map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => sendQuick(q)}
+                          className="px-3 py-1.5 rounded-full border border-border bg-secondary/60 hover:bg-primary/15 hover:border-primary/40 text-xs font-medium transition-colors"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
