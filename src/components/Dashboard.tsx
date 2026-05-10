@@ -62,6 +62,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   const playedIds = useRef<Set<string>>(new Set());
   const queueRef = useRef<Message[]>([]);
   const playingRef = useRef(false);
+  const leavingRef = useRef(false);
   const mutedRef = useRef(muted);
   const membersRef = useRef<Member[]>([]);
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -85,6 +86,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   // Heartbeat presence — frequent + on visibility/focus. Never auto-delete; rows persist for the service.
   useEffect(() => {
     const beat = () => {
+      if (leavingRef.current) return Promise.resolve();
       const next = { ...me, last_seen: new Date().toISOString() };
       localStorage.setItem("member", JSON.stringify(next));
       return supabase.from("team_members").update({ last_seen: next.last_seen }).eq("id", me.id);
@@ -227,9 +229,13 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   };
 
   const handleLeave = async () => {
+    leavingRef.current = true;
     stopSpeaking();
-    // Remove from live team list so others stop seeing this user
-    try { await supabase.from("team_members").delete().eq("id", me.id); } catch {}
+    setMembers((current) => current.filter((m) => m.id !== me.id));
+    // Hide immediately for everyone; delete is best-effort because old messages may keep membership rows for history.
+    const offlineAt = new Date(Date.now() - STALE_MS - 60_000).toISOString();
+    await supabase.from("team_members").update({ last_seen: offlineAt }).eq("id", me.id);
+    await supabase.from("team_members").delete().eq("id", me.id);
     localStorage.removeItem("member");
     onLeave();
   };
