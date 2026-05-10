@@ -33,6 +33,18 @@ const HEARTBEAT_MS = 8_000;
 // Build a stable group_key from a set of member ids (sorted, joined)
 const groupKeyOf = (ids: string[]) => [...new Set(ids)].sort().join("|");
 
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+  const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+  const Icon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
+  const label = theme === "system" ? "System" : theme;
+  return (
+    <Button variant="ghost" size="icon" onClick={() => setTheme(next)} aria-label={`Theme: ${label}`} title={`Theme: ${label} (tap to switch)`}>
+      <Icon className="w-4 h-4" />
+    </Button>
+  );
+};
+
 export const Dashboard = ({ me, onLeave }: Props) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
