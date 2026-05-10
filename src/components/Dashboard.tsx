@@ -115,15 +115,14 @@ export const Dashboard = ({ me, onLeave }: Props) => {
       const groupNote = msg.group_key ? " (group message)" : "";
       const prefix = sender ? `Message from ${sender.name}, ${sender.role}${groupNote}. ` : "New message. ";
       const fullText = prefix + msg.body;
+      const lang = detectLang(msg.body); // English or Swahili
 
       setSpeakingId(msg.id);
-      await speak(fullText, { onError: (err) => toast.error(`Audio: ${err}`) });
-      // Mark played after first read so badges clear
+      await speak(fullText, { lang, onError: (err) => toast.error(`Audio: ${err}`) });
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
-      // Wait 10s then repeat once
       await new Promise((r) => setTimeout(r, 10_000));
       if (!mutedRef.current) {
-        await speak("Repeat. " + fullText, { onError: () => {} });
+        await speak("Repeat. " + fullText, { lang, onError: () => {} });
       }
       setSpeakingId(null);
     }
