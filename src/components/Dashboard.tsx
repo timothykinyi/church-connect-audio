@@ -344,6 +344,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
             <Button variant="ghost" size="icon" onClick={() => setMuted((v) => !v)} aria-label={muted ? "Unmute" : "Mute"}>
               {muted ? <VolumeX className="w-4 h-4 text-destructive" /> : <Volume2 className="w-4 h-4" />}
             </Button>
+            <ThemeToggle />
             <div className="text-right hidden sm:block">
               <p className="font-semibold text-sm">{me.name}</p>
               <p className="text-xs text-muted-foreground">{me.role}</p>
