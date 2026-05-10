@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ROLE_COLORS } from "@/lib/roles";
-import { speak, primeSpeech, stopSpeaking, getVoices } from "@/lib/speech";
+import { speak, primeSpeech, stopSpeaking, getVoices, detectLang } from "@/lib/speech";
+import { QUICK_TEXTS } from "@/lib/quickTexts";
+import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
-import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download, UsersRound, Plus, X } from "lucide-react";
+import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download, UsersRound, Plus, X, Sun, Moon, Monitor, Zap } from "lucide-react";
 
 type Member = { id: string; name: string; role: string; last_seen: string };
 type Message = {
@@ -30,6 +32,18 @@ const HEARTBEAT_MS = 8_000;
 
 // Build a stable group_key from a set of member ids (sorted, joined)
 const groupKeyOf = (ids: string[]) => [...new Set(ids)].sort().join("|");
+
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+  const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+  const Icon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
+  const label = theme === "system" ? "System" : theme;
+  return (
+    <Button variant="ghost" size="icon" onClick={() => setTheme(next)} aria-label={`Theme: ${label}`} title={`Theme: ${label} (tap to switch)`}>
+      <Icon className="w-4 h-4" />
+    </Button>
+  );
+};
 
 export const Dashboard = ({ me, onLeave }: Props) => {
   const [members, setMembers] = useState<Member[]>([]);
@@ -113,15 +127,14 @@ export const Dashboard = ({ me, onLeave }: Props) => {
       const groupNote = msg.group_key ? " (group message)" : "";
       const prefix = sender ? `Message from ${sender.name}, ${sender.role}${groupNote}. ` : "New message. ";
       const fullText = prefix + msg.body;
+      const lang = detectLang(msg.body); // English or Swahili
 
       setSpeakingId(msg.id);
-      await speak(fullText, { onError: (err) => toast.error(`Audio: ${err}`) });
-      // Mark played after first read so badges clear
+      await speak(fullText, { lang, onError: (err) => toast.error(`Audio: ${err}`) });
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
-      // Wait 10s then repeat once
       await new Promise((r) => setTimeout(r, 10_000));
       if (!mutedRef.current) {
-        await speak("Repeat. " + fullText, { onError: () => {} });
+        await speak("Repeat. " + fullText, { lang, onError: () => {} });
       }
       setSpeakingId(null);
     }
@@ -215,8 +228,23 @@ export const Dashboard = ({ me, onLeave }: Props) => {
 
   const handleLeave = async () => {
     stopSpeaking();
+    // Remove from live team list so others stop seeing this user
+    try { await supabase.from("team_members").delete().eq("id", me.id); } catch {}
     localStorage.removeItem("member");
     onLeave();
+  };
+
+  const sendQuick = async (body: string) => {
+    if (!activeKey) return toast.error("Pick a teammate or group first");
+    if (isGroupKey) {
+      const ids = activeGroupKey.split("|").filter((id) => id !== me.id);
+      const rows = ids.map((rid) => ({ sender_id: me.id, recipient_id: rid, body, group_key: activeGroupKey }));
+      const { error } = await supabase.from("messages").insert(rows);
+      if (error) toast.error("Failed to send");
+    } else {
+      const { error } = await supabase.from("messages").insert({ sender_id: me.id, recipient_id: activePeerId, body });
+      if (error) toast.error("Failed to send");
+    }
   };
 
   const replay = (msg: Message) => {
@@ -316,6 +344,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
             <Button variant="ghost" size="icon" onClick={() => setMuted((v) => !v)} aria-label={muted ? "Unmute" : "Mute"}>
               {muted ? <VolumeX className="w-4 h-4 text-destructive" /> : <Volume2 className="w-4 h-4" />}
             </Button>
+            <ThemeToggle />
             <div className="text-right hidden sm:block">
               <p className="font-semibold text-sm">{me.name}</p>
               <p className="text-xs text-muted-foreground">{me.role}</p>
@@ -548,6 +577,27 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                     <span className="text-[10px] text-muted-foreground font-mono">
                       🔒 {isGroupKey ? `${groupMembers.length - 1} recipients hear this` : `Only ${peer?.name ?? ""} hears this`} · 🔁 Plays twice
                     </span>
+                  </div>
+
+                  {/* Quick texts — role-specific shortcuts */}
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Zap className="w-3.5 h-3.5 text-primary" />
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Quick · {me.role}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(QUICK_TEXTS[me.role] ?? QUICK_TEXTS.Other).map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => sendQuick(q)}
+                          className="px-3 py-1.5 rounded-full border border-border bg-secondary/60 hover:bg-primary/15 hover:border-primary/40 text-xs font-medium transition-colors"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>

@@ -5,7 +5,47 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
-  :root {
+  :root, .light {
+    --background: 220 30% 98%;
+    --foreground: 220 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+
+    --primary: 158 75% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 158 80% 50%;
+
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 220 25% 12%;
+
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 12% 45%;
+
+    --accent: 280 70% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 88%;
+    --input: 220 16% 94%;
+    --ring: 158 75% 38%;
+
+    --radius: 1rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(158 75% 42%), hsl(180 75% 48%));
+    --gradient-accent: linear-gradient(135deg, hsl(280 70% 60%), hsl(220 80% 60%));
+    --gradient-bg: radial-gradient(ellipse at top, hsl(220 30% 96%), hsl(220 30% 98%));
+
+    --shadow-glow: 0 0 60px hsl(158 75% 50% / 0.25);
+    --shadow-card: 0 4px 24px hsl(220 30% 40% / 0.08);
+  }
+
+  .dark {
     --background: 220 26% 8%;
     --foreground: 210 40% 98%;
 
@@ -35,8 +75,6 @@
     --input: 220 20% 16%;
     --ring: 158 84% 52%;
 
-    --radius: 1rem;
-
     --gradient-primary: linear-gradient(135deg, hsl(158 84% 52%), hsl(180 84% 55%));
     --gradient-accent: linear-gradient(135deg, hsl(280 90% 65%), hsl(220 90% 65%));
     --gradient-bg: radial-gradient(ellipse at top, hsl(220 30% 14%), hsl(220 26% 8%));
@@ -47,9 +85,7 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -59,21 +95,15 @@
 }
 
 @layer utilities {
-  .font-mono {
-    font-family: 'JetBrains Mono', monospace;
-  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
   .text-gradient {
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  .glow {
-    box-shadow: var(--shadow-glow);
-  }
-  .pulse-ring {
-    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
+  .glow { box-shadow: var(--shadow-glow); }
+  .pulse-ring { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
   @keyframes pulse-ring {
     0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5); }
     50% { box-shadow: 0 0 0 12px hsl(var(--primary) / 0); }
