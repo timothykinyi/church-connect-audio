@@ -39,13 +39,13 @@ export const JoinScreen = ({ onJoined }: Props) => {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 glow" style={{ background: 'var(--gradient-primary)' }}>
-            <Radio className="w-8 h-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-6 bg-primary text-primary-foreground">
+            <Radio className="w-7 h-7" />
           </div>
-          <h1 className="text-4xl font-bold mb-2">
-            Service<span className="text-gradient">Comm</span>
+          <h1 className="font-serif text-5xl mb-2 leading-none">
+            Service<em className="text-primary not-italic">Comm</em>
           </h1>
-          <p className="text-muted-foreground">Voice messages for your church team</p>
+          <p className="text-muted-foreground text-sm">Voice messages for your service team.</p>
         </div>
 
         <form onSubmit={handleJoin} className="bg-card border border-border rounded-2xl p-8 space-y-6" style={{ boxShadow: 'var(--shadow-card)' }}>
