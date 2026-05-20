@@ -128,7 +128,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
     playingRef.current = true;
     while (queueRef.current.length) {
       const msg = queueRef.current.shift()!;
-      if (mutedRef.current) {
+      if (!soundRef.current) {
         await supabase.from("messages").update({ played: true }).eq("id", msg.id);
         continue;
       }
@@ -141,9 +141,9 @@ export const Dashboard = ({ me, onLeave }: Props) => {
       setSpeakingId(msg.id);
       await speak(fullText, { lang, onError: (err) => toast.error(`Audio: ${err}`) });
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
-      await new Promise((r) => setTimeout(r, 10_000));
-      if (!mutedRef.current) {
-        await speak("Repeat. " + fullText, { lang, onError: () => {} });
+      if (repeatRef.current && soundRef.current) {
+        await new Promise((r) => setTimeout(r, 10_000));
+        if (soundRef.current) await speak("Repeat. " + fullText, { lang, onError: () => {} });
       }
       setSpeakingId(null);
     }
