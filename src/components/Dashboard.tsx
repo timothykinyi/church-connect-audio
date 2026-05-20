@@ -57,7 +57,8 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [audioReady, setAudioReady] = useState<boolean>(() => localStorage.getItem(AUDIO_READY_KEY) === "1");
-  const [muted, setMuted] = useState(false);
+  const [soundOn, setSoundOn] = useState<boolean>(() => localStorage.getItem(SOUND_KEY) !== "0");
+  const [repeatOn, setRepeatOn] = useState<boolean>(() => localStorage.getItem(REPEAT_KEY) !== "0");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
