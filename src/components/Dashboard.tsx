@@ -3,12 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ROLE_COLORS } from "@/lib/roles";
 import { speak, primeSpeech, stopSpeaking, getVoices, detectLang } from "@/lib/speech";
 import { QUICK_TEXTS } from "@/lib/quickTexts";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
-import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download, UsersRound, Plus, X, Sun, Moon, Monitor, Zap } from "lucide-react";
+import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, Download, UsersRound, Plus, X, Sun, Moon, Monitor, Zap, Settings, Repeat } from "lucide-react";
 
 type Member = { id: string; name: string; role: string; last_seen: string };
 type Message = {
@@ -27,6 +29,8 @@ interface Props {
 }
 
 const AUDIO_READY_KEY = "audio-ready-v1";
+const SOUND_KEY = "sound-enabled-v1";
+const REPEAT_KEY = "repeat-enabled-v1";
 const STALE_MS = 10 * 60_000; // 10 min — tolerate mobile/background throttling without hiding teammates
 const HEARTBEAT_MS = 8_000;
 
@@ -53,7 +57,8 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [audioReady, setAudioReady] = useState<boolean>(() => localStorage.getItem(AUDIO_READY_KEY) === "1");
-  const [muted, setMuted] = useState(false);
+  const [soundOn, setSoundOn] = useState<boolean>(() => localStorage.getItem(SOUND_KEY) !== "0");
+  const [repeatOn, setRepeatOn] = useState<boolean>(() => localStorage.getItem(REPEAT_KEY) !== "0");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
@@ -63,11 +68,13 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   const queueRef = useRef<Message[]>([]);
   const playingRef = useRef(false);
   const leavingRef = useRef(false);
-  const mutedRef = useRef(muted);
+  const soundRef = useRef(soundOn);
+  const repeatRef = useRef(repeatOn);
   const membersRef = useRef<Member[]>([]);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { soundRef.current = soundOn; localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); }, [soundOn]);
+  useEffect(() => { repeatRef.current = repeatOn; localStorage.setItem(REPEAT_KEY, repeatOn ? "1" : "0"); }, [repeatOn]);
   useEffect(() => { membersRef.current = members; }, [members]);
 
   useEffect(() => { getVoices(); }, []);
@@ -121,7 +128,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
     playingRef.current = true;
     while (queueRef.current.length) {
       const msg = queueRef.current.shift()!;
-      if (mutedRef.current) {
+      if (!soundRef.current) {
         await supabase.from("messages").update({ played: true }).eq("id", msg.id);
         continue;
       }
@@ -134,9 +141,9 @@ export const Dashboard = ({ me, onLeave }: Props) => {
       setSpeakingId(msg.id);
       await speak(fullText, { lang, onError: (err) => toast.error(`Audio: ${err}`) });
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
-      await new Promise((r) => setTimeout(r, 10_000));
-      if (!mutedRef.current) {
-        await speak("Repeat. " + fullText, { lang, onError: () => {} });
+      if (repeatRef.current && soundRef.current) {
+        await new Promise((r) => setTimeout(r, 10_000));
+        if (soundRef.current) await speak("Repeat. " + fullText, { lang, onError: () => {} });
       }
       setSpeakingId(null);
     }
@@ -333,12 +340,12 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         {/* Header */}
         <header className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--gradient-primary)' }}>
-              <Radio className="w-5 h-5 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary text-primary-foreground">
+              <Radio className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-tight">Service<span className="text-gradient">Comm</span></h1>
-              <p className="text-xs text-muted-foreground font-mono">Live · {members.length} on duty</p>
+              <h1 className="font-serif text-2xl leading-none">Service<em className="text-primary not-italic">Comm</em></h1>
+              <p className="text-[11px] text-muted-foreground font-mono mt-1">Live · {members.length} on duty</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -347,10 +354,43 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                 <Download className="w-4 h-4 mr-1" /> Install
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={() => setMuted((v) => !v)} aria-label={muted ? "Unmute" : "Mute"}>
-              {muted ? <VolumeX className="w-4 h-4 text-destructive" /> : <Volume2 className="w-4 h-4" />}
-            </Button>
-            <ThemeToggle />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Settings">
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-serif text-lg leading-none mb-1">Settings</h3>
+                    <p className="text-xs text-muted-foreground">Tune how messages reach you.</p>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-sm font-medium">
+                        <Volume2 className="w-3.5 h-3.5" /> Sound
+                      </div>
+                      <p className="text-xs text-muted-foreground">Read incoming messages aloud.</p>
+                    </div>
+                    <Switch checked={soundOn} onCheckedChange={setSoundOn} aria-label="Toggle sound" />
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-sm font-medium">
+                        <Repeat className="w-3.5 h-3.5" /> Repeat
+                      </div>
+                      <p className="text-xs text-muted-foreground">Play each message again after 10s.</p>
+                    </div>
+                    <Switch checked={repeatOn} onCheckedChange={setRepeatOn} aria-label="Toggle repeat" />
+                  </div>
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Theme</span>
+                    <ThemeToggle />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <div className="text-right hidden sm:block">
               <p className="font-semibold text-sm">{me.name}</p>
               <p className="text-xs text-muted-foreground">{me.role}</p>
@@ -581,7 +621,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                   <div className="flex items-center justify-between mt-1.5 px-1">
                     <span className="text-[10px] text-muted-foreground font-mono">{text.length}/500 · Enter to send · Shift+Enter newline</span>
                     <span className="text-[10px] text-muted-foreground font-mono">
-                      🔒 {isGroupKey ? `${groupMembers.length - 1} recipients hear this` : `Only ${peer?.name ?? ""} hears this`} · 🔁 Plays twice
+                      {isGroupKey ? `${groupMembers.length - 1} recipients` : `Only ${peer?.name ?? ""}`} · {soundOn ? (repeatOn ? "plays twice" : "plays once") : "silent"}
                     </span>
                   </div>
 
