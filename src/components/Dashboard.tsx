@@ -340,12 +340,12 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         {/* Header */}
         <header className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--gradient-primary)' }}>
-              <Radio className="w-5 h-5 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary text-primary-foreground">
+              <Radio className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-tight">Service<span className="text-gradient">Comm</span></h1>
-              <p className="text-xs text-muted-foreground font-mono">Live · {members.length} on duty</p>
+              <h1 className="font-serif text-2xl leading-none">Service<em className="text-primary not-italic">Comm</em></h1>
+              <p className="text-[11px] text-muted-foreground font-mono mt-1">Live · {members.length} on duty</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
