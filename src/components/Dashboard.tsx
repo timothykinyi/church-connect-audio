@@ -3,12 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ROLE_COLORS } from "@/lib/roles";
 import { speak, primeSpeech, stopSpeaking, getVoices, detectLang } from "@/lib/speech";
 import { QUICK_TEXTS } from "@/lib/quickTexts";
 import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
-import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, VolumeX, Download, UsersRound, Plus, X, Sun, Moon, Monitor, Zap } from "lucide-react";
+import { LogOut, Send, Volume2, Users, Radio, CheckCheck, Check, Download, UsersRound, Plus, X, Sun, Moon, Monitor, Zap, Settings, Repeat } from "lucide-react";
 
 type Member = { id: string; name: string; role: string; last_seen: string };
 type Message = {
