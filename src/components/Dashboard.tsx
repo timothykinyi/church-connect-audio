@@ -68,11 +68,13 @@ export const Dashboard = ({ me, onLeave }: Props) => {
   const queueRef = useRef<Message[]>([]);
   const playingRef = useRef(false);
   const leavingRef = useRef(false);
-  const mutedRef = useRef(muted);
+  const soundRef = useRef(soundOn);
+  const repeatRef = useRef(repeatOn);
   const membersRef = useRef<Member[]>([]);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { soundRef.current = soundOn; localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); }, [soundOn]);
+  useEffect(() => { repeatRef.current = repeatOn; localStorage.setItem(REPEAT_KEY, repeatOn ? "1" : "0"); }, [repeatOn]);
   useEffect(() => { membersRef.current = members; }, [members]);
 
   useEffect(() => { getVoices(); }, []);
