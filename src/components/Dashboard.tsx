@@ -29,6 +29,8 @@ interface Props {
 }
 
 const AUDIO_READY_KEY = "audio-ready-v1";
+const SOUND_KEY = "sound-enabled-v1";
+const REPEAT_KEY = "repeat-enabled-v1";
 const STALE_MS = 10 * 60_000; // 10 min — tolerate mobile/background throttling without hiding teammates
 const HEARTBEAT_MS = 8_000;
 
