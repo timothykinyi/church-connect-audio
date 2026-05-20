@@ -354,10 +354,43 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                 <Download className="w-4 h-4 mr-1" /> Install
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={() => setMuted((v) => !v)} aria-label={muted ? "Unmute" : "Mute"}>
-              {muted ? <VolumeX className="w-4 h-4 text-destructive" /> : <Volume2 className="w-4 h-4" />}
-            </Button>
-            <ThemeToggle />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Settings">
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-serif text-lg leading-none mb-1">Settings</h3>
+                    <p className="text-xs text-muted-foreground">Tune how messages reach you.</p>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-sm font-medium">
+                        <Volume2 className="w-3.5 h-3.5" /> Sound
+                      </div>
+                      <p className="text-xs text-muted-foreground">Read incoming messages aloud.</p>
+                    </div>
+                    <Switch checked={soundOn} onCheckedChange={setSoundOn} aria-label="Toggle sound" />
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-sm font-medium">
+                        <Repeat className="w-3.5 h-3.5" /> Repeat
+                      </div>
+                      <p className="text-xs text-muted-foreground">Play each message again after 10s.</p>
+                    </div>
+                    <Switch checked={repeatOn} onCheckedChange={setRepeatOn} aria-label="Toggle repeat" />
+                  </div>
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Theme</span>
+                    <ThemeToggle />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <div className="text-right hidden sm:block">
               <p className="font-semibold text-sm">{me.name}</p>
               <p className="text-xs text-muted-foreground">{me.role}</p>
