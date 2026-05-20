@@ -621,7 +621,7 @@ export const Dashboard = ({ me, onLeave }: Props) => {
                   <div className="flex items-center justify-between mt-1.5 px-1">
                     <span className="text-[10px] text-muted-foreground font-mono">{text.length}/500 · Enter to send · Shift+Enter newline</span>
                     <span className="text-[10px] text-muted-foreground font-mono">
-                      🔒 {isGroupKey ? `${groupMembers.length - 1} recipients hear this` : `Only ${peer?.name ?? ""} hears this`} · 🔁 Plays twice
+                      {isGroupKey ? `${groupMembers.length - 1} recipients` : `Only ${peer?.name ?? ""}`} · {soundOn ? (repeatOn ? "plays twice" : "plays once") : "silent"}
                     </span>
                   </div>
 
