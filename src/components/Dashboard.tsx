@@ -133,17 +133,22 @@ export const Dashboard = ({ me, onLeave }: Props) => {
         continue;
       }
       const sender = membersRef.current.find((m) => m.id === msg.sender_id);
-      const groupNote = msg.group_key ? " (group message)" : "";
-      const prefix = sender ? `Message from ${sender.name}, ${sender.role}${groupNote}. ` : "New message. ";
-      const fullText = prefix + msg.body;
       const lang = detectLang(msg.body); // English or Swahili
+      const groupNote = msg.group_key ? (lang === "sw-KE" ? ", ujumbe wa kikundi" : ", group message") : "";
+      const prefix = sender
+        ? lang === "sw-KE"
+          ? `Ujumbe kutoka kwa ${sender.name}, ${sender.role}${groupNote}. `
+          : `Message from ${sender.name}, ${sender.role}${groupNote}. `
+        : lang === "sw-KE" ? "Ujumbe mpya. " : "New message. ";
+      const fullText = prefix + msg.body;
 
       setSpeakingId(msg.id);
       await speak(fullText, { lang, onError: (err) => toast.error(`Audio: ${err}`) });
       await supabase.from("messages").update({ played: true }).eq("id", msg.id);
       if (repeatRef.current && soundRef.current) {
         await new Promise((r) => setTimeout(r, 10_000));
-        if (soundRef.current) await speak("Repeat. " + fullText, { lang, onError: () => {} });
+        const repeatLabel = lang === "sw-KE" ? "Narudia. " : "Repeating. ";
+        if (soundRef.current) await speak(repeatLabel + fullText, { lang, onError: () => {} });
       }
       setSpeakingId(null);
     }

@@ -1,4 +1,4 @@
-// Robust Web Speech API helpers with English + Swahili support.
+// Free, device-native Web Speech helpers with English + Swahili support.
 
 let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 
@@ -16,7 +16,7 @@ export const getVoices = (): Promise<SpeechSynthesisVoice[]> => {
       resolve(v);
     };
 
-    synth.addEventListener?.("voiceschanged", () => finish(synth.getVoices()), { once: true } as any);
+    synth.addEventListener?.("voiceschanged", () => finish(synth.getVoices()), { once: true });
     let tries = 0;
     const id = setInterval(() => {
       const v = synth.getVoices();
@@ -31,15 +31,28 @@ export const getVoices = (): Promise<SpeechSynthesisVoice[]> => {
 const SW_WORDS = /\b(na|ya|wa|kwa|ni|si|hii|hiyo|hapa|pale|sasa|asante|karibu|habari|jambo|tafadhali|samahani|ndiyo|hapana|mimi|wewe|yeye|sisi|nyinyi|wao|mzuri|vizuri|sawa|nataka|nina|kuna|hakuna)\b/i;
 export const detectLang = (text: string): "sw-KE" | "en-US" => (SW_WORDS.test(text) ? "sw-KE" : "en-US");
 
+const NATURAL_VOICE_MARKERS = ["natural", "neural", "premium", "enhanced", "google", "microsoft"];
+const NOVELTY_VOICE_MARKERS = ["whisper", "zarvox", "trinoids", "bells", "boing", "bubbles", "cellos"];
+
+const voiceScore = (voice: SpeechSynthesisVoice, lang: string) => {
+  const requested = lang.toLowerCase();
+  const language = voice.lang.toLowerCase();
+  const name = voice.name.toLowerCase();
+  let score = 0;
+
+  if (language === requested) score += 120;
+  else if (language.startsWith(requested.slice(0, 2))) score += 90;
+  else if (requested.startsWith("sw") && language.startsWith("en")) score += 20;
+  if (NATURAL_VOICE_MARKERS.some((marker) => name.includes(marker))) score += 30;
+  if (!voice.localService) score += 8;
+  if (voice.default) score += 4;
+  if (NOVELTY_VOICE_MARKERS.some((marker) => name.includes(marker))) score -= 100;
+  return score;
+};
+
 const pickVoice = (voices: SpeechSynthesisVoice[], lang: string): SpeechSynthesisVoice | undefined => {
   if (!voices.length) return undefined;
-  const code = lang.toLowerCase().slice(0, 2);
-  return (
-    voices.find((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase())) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith(code)) ||
-    voices.find((v) => v.default) ||
-    voices[0]
-  );
+  return [...voices].sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))[0];
 };
 
 export interface SpeakOptions {
@@ -61,7 +74,10 @@ export const speak = async (text: string, opts: SpeakOptions = {}): Promise<void
     const voice = pickVoice(voices, lang);
     if (voice) utt.voice = voice;
     utt.lang = lang;
-    utt.rate = 1; utt.pitch = 1; utt.volume = 1;
+    // A slightly slower pace keeps short production instructions clear and human.
+    utt.rate = lang.toLowerCase().startsWith("sw") ? 0.9 : 0.94;
+    utt.pitch = 1;
+    utt.volume = 1;
 
     utt.onstart = () => opts.onStart?.();
     utt.onend = () => { opts.onEnd?.(); resolve(); };

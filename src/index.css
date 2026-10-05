@@ -2,81 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @layer base {
   :root, .light {
-    --background: 38 30% 96%;
-    --foreground: 25 25% 14%;
+    --background: 40 43% 97%;
+    --foreground: 215 51% 16%;
 
-    --card: 40 40% 99%;
-    --card-foreground: 25 25% 14%;
+    --card: 40 33% 99%;
+    --card-foreground: 215 51% 16%;
 
-    --popover: 40 40% 99%;
-    --popover-foreground: 25 25% 14%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 215 51% 16%;
 
-    --primary: 18 65% 42%;
-    --primary-foreground: 40 40% 98%;
-    --primary-glow: 18 70% 55%;
+    --primary: 212 100% 31%;
+    --primary-foreground: 40 43% 97%;
+    --primary-glow: 211 100% 43%;
 
-    --secondary: 36 22% 92%;
-    --secondary-foreground: 25 25% 14%;
+    --secondary: 40 31% 93%;
+    --secondary-foreground: 214 48% 24%;
 
-    --muted: 36 22% 94%;
-    --muted-foreground: 28 12% 42%;
+    --muted: 40 25% 94%;
+    --muted-foreground: 214 25% 42%;
 
-    --accent: 200 45% 38%;
-    --accent-foreground: 40 40% 98%;
+    --accent: 36 72% 55%;
+    --accent-foreground: 215 51% 16%;
 
     --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 32 18% 86%;
-    --input: 36 22% 95%;
-    --ring: 18 65% 42%;
+    --border: 40 18% 86%;
+    --input: 40 25% 94%;
+    --ring: 212 100% 31%;
 
     --radius: 0.75rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(18 65% 42%), hsl(14 70% 50%));
-    --gradient-accent: linear-gradient(135deg, hsl(200 45% 38%), hsl(190 50% 45%));
+    --gradient-primary: linear-gradient(135deg, hsl(212 100% 31%), hsl(211 100% 42%));
+    --gradient-accent: linear-gradient(135deg, hsl(36 72% 55%), hsl(42 82% 62%));
     --gradient-bg: none;
 
-    --shadow-glow: 0 1px 3px hsl(25 25% 14% / 0.08);
-    --shadow-card: 0 1px 2px hsl(25 25% 14% / 0.04), 0 1px 3px hsl(25 25% 14% / 0.06);
+    --shadow-glow: 0 1px 3px hsl(212 100% 20% / 0.12);
+    --shadow-card: 0 1px 2px hsl(212 60% 18% / 0.05), 0 8px 24px -18px hsl(212 60% 18% / 0.25);
   }
 
   .dark {
-    --background: 25 15% 9%;
-    --foreground: 38 20% 92%;
+    --background: 215 51% 8%;
+    --foreground: 40 22% 94%;
 
-    --card: 25 15% 12%;
-    --card-foreground: 38 20% 92%;
+    --card: 214 45% 12%;
+    --card-foreground: 40 22% 94%;
 
-    --popover: 25 15% 12%;
-    --popover-foreground: 38 20% 92%;
+    --popover: 214 45% 12%;
+    --popover-foreground: 40 22% 94%;
 
-    --primary: 18 75% 58%;
-    --primary-foreground: 25 15% 9%;
-    --primary-glow: 18 80% 65%;
+    --primary: 212 100% 78%;
+    --primary-foreground: 215 51% 10%;
+    --primary-glow: 211 100% 68%;
 
-    --secondary: 25 12% 16%;
-    --secondary-foreground: 38 20% 92%;
+    --secondary: 214 34% 18%;
+    --secondary-foreground: 40 22% 94%;
 
-    --muted: 25 12% 14%;
-    --muted-foreground: 30 10% 60%;
+    --muted: 214 34% 18%;
+    --muted-foreground: 40 12% 72%;
 
-    --accent: 200 55% 60%;
-    --accent-foreground: 25 15% 9%;
+    --accent: 38 79% 62%;
+    --accent-foreground: 215 51% 10%;
 
     --destructive: 0 70% 55%;
     --destructive-foreground: 38 20% 92%;
 
-    --border: 25 12% 20%;
-    --input: 25 12% 16%;
-    --ring: 18 75% 58%;
+    --border: 212 25% 24%;
+    --input: 214 34% 18%;
+    --ring: 212 100% 78%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(18 75% 55%), hsl(14 80% 60%));
-    --gradient-accent: linear-gradient(135deg, hsl(200 55% 60%), hsl(190 60% 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(212 100% 66%), hsl(212 100% 78%));
+    --gradient-accent: linear-gradient(135deg, hsl(38 79% 58%), hsl(42 82% 66%));
     --gradient-bg: none;
 
     --shadow-glow: 0 1px 3px hsl(0 0% 0% / 0.4);
@@ -94,12 +92,12 @@
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
   }
-  h1, h2, h3 { letter-spacing: -0.02em; }
+  h1, h2, h3 { letter-spacing: 0; }
 }
 
 @layer utilities {
   .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-  .font-serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: -0.01em; }
+  .font-serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: 0; }
   .text-gradient {
     color: hsl(var(--primary));
   }
